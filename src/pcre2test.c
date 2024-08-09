@@ -920,7 +920,8 @@ enum { CONF_BSR,
        CONF_FIX,
        CONF_FIZ,
        CONF_INT,
-       CONF_NL
+       CONF_NL,
+       CONF_JU
 };
 
 static coptstruct coptlist[] = {
@@ -929,6 +930,7 @@ static coptstruct coptlist[] = {
   { "ebcdic",      CONF_FIX, SUPPORT_EBCDIC },
   { "ebcdic-nl",   CONF_FIZ, EBCDIC_NL },
   { "jit",         CONF_INT, PCRE2_CONFIG_JIT },
+  { "jitusable",   CONF_JU,  0 },
   { "linksize",    CONF_INT, PCRE2_CONFIG_LINKSIZE },
   { "newline",     CONF_NL,  PCRE2_CONFIG_NEWLINE },
   { "pcre2-16",    CONF_FIX, SUPPORT_16 },
@@ -3641,7 +3643,7 @@ while (top > bot)
   {
   int mid = (bot + top)/2;
   unsigned int mlen = strlen(modlist[mid].name);
-  int c = strncmp((char *)p, modlist[mid].name, (len < mlen)? len : mlen);
+  int c = strncmp((const char *)p, modlist[mid].name, (len < mlen)? len : mlen);
   if (c == 0)
     {
     if (len == mlen) return mid;
@@ -3692,7 +3694,7 @@ if (restrict_for_perl_test) switch(m->which)
   break;
 
   default:
-  fprintf(outfile, "** '%s' is not allowed in a Perl-compatible test\n",
+  fprintf(outfile, "** \"%s\" is not allowed in a Perl-compatible test\n",
     m->name);
   return NULL;
   }
@@ -3733,7 +3735,7 @@ switch (m->which)
 if (field == NULL)
   {
   if (c == 0)
-    fprintf(outfile, "** '%s' is not valid here\n", m->name);
+    fprintf(outfile, "** \"%s\" is not valid here\n", m->name);
   else
     fprintf(outfile, "** /%c is not valid here\n", c);
   return NULL;
@@ -3822,11 +3824,13 @@ for (;;)
 
     if (!first)
       {
-      fprintf(outfile, "** Unrecognized modifier '%.*s'\n", (int)(ep-p), p);
+      fprintf(outfile, "** Unrecognized modifier \"%.*s\"\n", (int)(ep-p), p);
       if (ep - p == 1)
         fprintf(outfile, "** Single-character modifiers must come first\n");
       return FALSE;
       }
+
+    first = FALSE;
 
     for (cc = *p; cc != ',' && cc != '\n' && cc != 0; cc = *(++p))
       {
@@ -3835,8 +3839,8 @@ for (;;)
 
       if (i >= C1MODLISTCOUNT)
         {
-        fprintf(outfile, "** Unrecognized modifier '%c' in '%.*s'\n",
-          *p, (int)(ep-mp), mp);
+        fprintf(outfile, "** Unrecognized modifier '%c' in modifier string "
+          "\"%.*s\"\n", *p, (int)(ep-mp), mp);
         return FALSE;
         }
 
@@ -3847,12 +3851,12 @@ for (;;)
 
       else
         {
-        index = scan_modifiers((uint8_t *)(c1modlist[i].fullname),
+        index = scan_modifiers((const uint8_t *)(c1modlist[i].fullname),
           strlen(c1modlist[i].fullname));
         if (index < 0)
           {
           fprintf(outfile, "** Internal error: single-character equivalent "
-            "modifier '%s' not found\n", c1modlist[i].fullname);
+            "modifier \"%s\" not found\n", c1modlist[i].fullname);
           return FALSE;
           }
         c1modlist[i].index = index;     /* Cache for next time */
@@ -3885,12 +3889,12 @@ for (;;)
     {
     if (*pp++ != '=')
       {
-      fprintf(outfile, "** '=' expected after '%s'\n", m->name);
+      fprintf(outfile, "** '=' expected after \"%s\"\n", m->name);
       return FALSE;
       }
     if (off)
       {
-      fprintf(outfile, "** '-' is not valid for '%s'\n", m->name);
+      fprintf(outfile, "** '-' is not valid for \"%s\"\n", m->name);
       return FALSE;
       }
     }
@@ -4060,7 +4064,7 @@ for (;;)
           field = (char *)field + sizeof(int32_t);
         if (ct <= 0)
           {
-          fprintf(outfile, "** Too many numeric '%s' modifiers\n", m->name);
+          fprintf(outfile, "** Too many numeric \"%s\" modifiers\n", m->name);
           return FALSE;
           }
         }
@@ -4078,13 +4082,13 @@ for (;;)
         {
         if (len > MAX_NAME_SIZE)
           {
-          fprintf(outfile, "** Group name in '%s' is too long\n", m->name);
+          fprintf(outfile, "** Group name in \"%s\" is too long\n", m->name);
           return FALSE;
           }
         while (*nn != 0) nn += strlen(nn) + 1;
         if (nn + len + 2 - (char *)field > LENCPYGET)
           {
-          fprintf(outfile, "** Too many characters in named '%s' modifiers\n",
+          fprintf(outfile, "** Too many characters in named \"%s\" modifiers\n",
             m->name);
           return FALSE;
           }
@@ -4099,7 +4103,7 @@ for (;;)
     case MOD_STR:
     if (len + 1 > m->value)
       {
-      fprintf(outfile, "** Overlong value for '%s' (max %d code units)\n",
+      fprintf(outfile, "** Overlong value for \"%s\" (max %d code units)\n",
         m->name, m->value - 1);
       return FALSE;
       }
@@ -4111,12 +4115,11 @@ for (;;)
 
   if (*pp != ',' && *pp != '\n' && *pp != ' ' && *pp != 0)
     {
-    fprintf(outfile, "** Comma expected after modifier item '%s'\n", m->name);
+    fprintf(outfile, "** Comma expected after modifier item \"%s\"\n", m->name);
     return FALSE;
     }
 
   p = pp;
-  first = FALSE;
 
   if (ctx == CTX_POPPAT &&
      (pctl->options != 0 ||
@@ -4124,7 +4127,7 @@ for (;;)
       pctl->locale[0] != 0 ||
       (pctl->control & NOTPOP_CONTROLS) != 0))
     {
-    fprintf(outfile, "** '%s' is not valid here\n", m->name);
+    fprintf(outfile, "** \"%s\" is not valid here\n", m->name);
     return FALSE;
     }
   }
@@ -4132,7 +4135,7 @@ for (;;)
 return TRUE;
 
 INVALID_VALUE:
-fprintf(outfile, "** Invalid value in '%.*s'\n", (int)(ep-p), p);
+fprintf(outfile, "** Invalid value in \"%.*s\"\n", (int)(ep-p), p);
 return FALSE;
 }
 
@@ -4733,7 +4736,7 @@ if ((pat_patctl.control & CTL_INFO) != 0)
         ((((PCRE2_SPTR8)nametable)[0]) << 8) | ((PCRE2_SPTR8)nametable)[1]));
 #endif
 
-      nametable = (void*)((PCRE2_SPTR8)nametable + nameentrysize * code_unit_size);
+      nametable = (void *)((PCRE2_UCHAR8 *)nametable + nameentrysize * code_unit_size);
       }
     }
 
@@ -4971,7 +4974,7 @@ if (endf == filename)
 *fptr = fopen((const char *)filename, mode);
 if (*fptr == NULL)
   {
-  fprintf(outfile, "** Failed to open '%s': %s\n", filename, strerror(errno));
+  fprintf(outfile, "** Failed to open \"%s\": %s\n", filename, strerror(errno));
   return PR_ABEND;
   }
 
@@ -5553,7 +5556,7 @@ if (pat_patctl.locale[0] != 0)
     }
   if (setlocale(LC_CTYPE, (const char *)pat_patctl.locale) == NULL)
     {
-    fprintf(outfile, "** Failed to set locale '%s'\n", pat_patctl.locale);
+    fprintf(outfile, "** Failed to set locale \"%s\"\n", pat_patctl.locale);
     return PR_SKIP;
     }
   if (strcmp((const char *)pat_patctl.locale, (const char *)locale_name) != 0)
@@ -5561,7 +5564,7 @@ if (pat_patctl.locale[0] != 0)
     strcpy((char *)locale_name, (char *)pat_patctl.locale);
     if (locale_tables != NULL)
       {
-      PCRE2_MAKETABLES_FREE(general_context, (void *)locale_tables);
+      PCRE2_MAKETABLES_FREE(general_context, (const void *)locale_tables);
       }
     PCRE2_MAKETABLES(locale_tables, general_context);
     }
@@ -6676,13 +6679,13 @@ for (;;)
 
   PCRE2_SUBSTRING_NUMBER_FROM_NAME(groupnumber, compiled_code, pbuffer);
   if (groupnumber < 0 && groupnumber != PCRE2_ERROR_NOUNIQUESUBSTRING)
-    fprintf(outfile, "Number not found for group '%s'\n", nptr);
+    fprintf(outfile, "Number not found for group \"%s\"\n", nptr);
 
   length = sizeof(copybuffer)/code_unit_size;
   PCRE2_SUBSTRING_COPY_BYNAME(rc, match_data, pbuffer, copybuffer, &length);
   if (rc < 0)
     {
-    fprintf(outfile, "Copy substring '%s' failed (%d): ", nptr, rc);
+    fprintf(outfile, "Copy substring \"%s\" failed (%d): ", nptr, rc);
     if (!print_error_message(rc, "", "\n")) return FALSE;
     }
   else
@@ -6690,7 +6693,7 @@ for (;;)
     PCRE2_SUBSTRING_LENGTH_BYNAME(rc, match_data, pbuffer, &length2);
     if (rc < 0)
       {
-      fprintf(outfile, "Get substring '%s' length failed (%d): ", nptr, rc);
+      fprintf(outfile, "Get substring \"%s\" length failed (%d): ", nptr, rc);
       if (!print_error_message(rc, "", "\n")) return FALSE;
       }
     else if (length2 != length)
@@ -6757,12 +6760,12 @@ for (;;)
 
   PCRE2_SUBSTRING_NUMBER_FROM_NAME(groupnumber, compiled_code, pbuffer);
   if (groupnumber < 0 && groupnumber != PCRE2_ERROR_NOUNIQUESUBSTRING)
-    fprintf(outfile, "Number not found for group '%s'\n", nptr);
+    fprintf(outfile, "Number not found for group \"%s\"\n", nptr);
 
   PCRE2_SUBSTRING_GET_BYNAME(rc, match_data, pbuffer, &gotbuffer, &length);
   if (rc < 0)
     {
-    fprintf(outfile, "Get substring '%s' failed (%d): ", nptr, rc);
+    fprintf(outfile, "Get substring \"%s\" failed (%d): ", nptr, rc);
     if (!print_error_message(rc, "", "\n")) return FALSE;
     }
   else
@@ -7920,13 +7923,20 @@ for (gmatched = 0;; gmatched++)
   /* The result of the match is now in capcount. First handle a successful
   match. If pp was forced to be NULL (to test NULL handling) it will have been
   treated as an empty string if the length was zero. So re-create that for
-  outputting. */
+  outputting. Don't just point to "" because that leads to a "loss of const"
+  warning. */
 
   if (capcount >= 0)
     {
-    int i;
-
-    if (pp == NULL) pp = (uint8_t *)"";
+    if (pp == NULL)
+      {
+#ifdef SUPPORT_VALGRIND
+      /* Mark the start of dbuffer addressable again. */
+      VALGRIND_MAKE_MEM_UNDEFINED(dbuffer, 1);
+#endif
+      pp = dbuffer;
+      pp[0] = 0;
+      }
 
     if (capcount > (int)oveccount)   /* Check for lunatic return value */
       {
@@ -7951,11 +7961,11 @@ for (gmatched = 0;; gmatched++)
         fprintf(outfile,
           "** PCRE2 error: flag not set after copy_matched_subject\n");
 
-      if (CASTFLD(void *, match_data, subject) == pp)
+      if (CASTFLD(const void *, match_data, subject) == pp)
         fprintf(outfile,
           "** PCRE2 error: copy_matched_subject has not copied\n");
 
-      if (memcmp(CASTFLD(void *, match_data, subject), pp, ulen) != 0)
+      if (memcmp(CASTFLD(const void *, match_data, subject), pp, ulen) != 0)
         fprintf(outfile,
           "** PCRE2 error: copy_matched_subject mismatch\n");
       }
@@ -8002,7 +8012,7 @@ for (gmatched = 0;; gmatched++)
     /* Output the captured substrings. Note that, for the matched string,
     the use of \K in an assertion can make the start later than the end. */
 
-    for (i = 0; i < 2*capcount; i += 2)
+    for (int i = 0; i < 2*capcount; i += 2)
       {
       PCRE2_SIZE lleft, lmiddle, lright;
       PCRE2_SIZE start = ovector[i];
@@ -8133,7 +8143,7 @@ for (gmatched = 0;; gmatched++)
          TESTFLD(match_data, mark, !=, NULL))
       {
       fprintf(outfile, "MK: ");
-      PCHARSV(CASTFLD(void *, match_data, mark), -1, -1, utf, outfile);
+      PCHARSV(CASTFLD(const void *, match_data, mark), -1, -1, utf, outfile);
       fprintf(outfile, "\n");
       }
 
@@ -8165,7 +8175,7 @@ for (gmatched = 0;; gmatched++)
          TESTFLD(match_data, mark, !=, NULL))
       {
       fprintf(outfile, ", mark=");
-      PCHARS(rubriclength, CASTFLD(void *, match_data, mark), -1, -1, utf,
+      PCHARS(rubriclength, CASTFLD(const void *, match_data, mark), -1, -1, utf,
         outfile);
       rubriclength += 7;
       }
@@ -8181,9 +8191,8 @@ for (gmatched = 0;; gmatched++)
 
     if (backlength != 0)
       {
-      int i;
-      for (i = 0; i < rubriclength; i++) fprintf(outfile, " ");
-      for (i = 0; i < backlength; i++) fprintf(outfile, "<");
+      for (int i = 0; i < rubriclength; i++) fprintf(outfile, " ");
+      for (int i = 0; i < backlength; i++) fprintf(outfile, "<");
       fprintf(outfile, "\n");
       }
 
@@ -8264,7 +8273,7 @@ for (gmatched = 0;; gmatched++)
              TESTFLD(match_data, mark, !=, NULL))
           {
           fprintf(outfile, ", mark = ");
-          PCHARSV(CASTFLD(void *, match_data, mark), -1, -1, utf, outfile);
+          PCHARSV(CASTFLD(const void *, match_data, mark), -1, -1, utf, outfile);
           }
         if ((pat_patctl.control & CTL_JITVERIFY) != 0 && jit_was_used)
           fprintf(outfile, " (JIT)");
@@ -8511,6 +8520,7 @@ printf("     bsr            \\R type [ANYCRLF, ANY]\n");
 printf("     ebcdic         compiled for EBCDIC character code [0,1]\n");
 printf("     ebcdic-nl      NL code if compiled for EBCDIC\n");
 printf("     jit            just-in-time compiler supported [0, 1]\n");
+printf("     jitusable      test JIT usability [0, 1, 2, 3]\n");
 printf("     linksize       internal link size [2, 3, 4]\n");
 printf("     newline        newline type [CR, LF, CRLF, ANYCRLF, ANY, NUL]\n");
 printf("     pcre2-8        8 bit library support enabled [0, 1]\n");
@@ -8568,7 +8578,7 @@ if (arg != NULL && arg[0] != CHAR_MINUS)
 
   if (i >= COPTLISTCOUNT)
     {
-    fprintf(stderr, "** Unknown -C option '%s'\n", arg);
+    fprintf(stderr, "** Unknown -C option \"%s\"\n", arg);
     return 0;
     }
 
@@ -8597,6 +8607,19 @@ if (arg != NULL && arg[0] != CHAR_MINUS)
     case CONF_NL:
     (void)PCRE2_CONFIG(coptlist[i].value, &optval);
     print_newline_config(optval, TRUE);
+    break;
+
+    case CONF_JU:
+    SET(compiled_code, NULL);
+    PCRE2_JIT_COMPILE(yield, compiled_code, PCRE2_JIT_TEST_ALLOC);
+    switch(yield)
+      {
+      case 0: break;
+      case PCRE2_ERROR_NOMEMORY: yield = 1; break;
+      case PCRE2_ERROR_NULL: yield = 2; break;
+      default: yield = 3; break;
+      }
+    printf("%d\n", yield);
     break;
     }
 
@@ -8668,9 +8691,30 @@ else printf("  No Unicode support\n");
 (void)PCRE2_CONFIG(PCRE2_CONFIG_JIT, &optval);
 if (optval != 0)
   {
-  printf("  Just-in-time compiler support: ");
+  printf("  Just-in-time compiler support\n");
+  printf("    Architecture: ");
   print_jit_target(stdout);
   printf("\n");
+
+  printf("    Can allocate executable memory: ");
+  SET(compiled_code, NULL);
+  PCRE2_JIT_COMPILE(yield, compiled_code, PCRE2_JIT_TEST_ALLOC);
+  switch(yield)
+    {
+    case 0:
+    printf("Yes\n");
+    break;
+
+    case PCRE2_ERROR_NOMEMORY:
+    printf("No (so cannot work)\n");
+    break;
+
+    default:
+    printf("\n** Unexpected return %d from "
+      "pcre2_jit_compile(NULL, PCRE2_JIT_TEST_ALLOC)\n", yield);
+    printf("** Should not occur\n");
+    break;
+    }
   }
 else
   {
@@ -8923,7 +8967,7 @@ for (i = 0; i < MODLISTCOUNT; i++)
     is_pattern = FALSE;
     break;
 
-    default: printf("** Unknown type for modifier '%s'\n", m->name);
+    default: printf("** Unknown type for modifier \"%s\"\n", m->name);
     /* Fall through */
     case MOD_PD:        /* Pattern or subject */
     case MOD_PDP:       /* As PD, OK for Perl-compatible test */
@@ -9318,7 +9362,7 @@ while (argc > 1 && argv[op][0] == '-' && argv[op][1] != 0)
 
   else
     {
-    fprintf(stderr, "** Unknown or malformed option '%s'\n", arg);
+    fprintf(stderr, "** Unknown or malformed option \"%s\"\n", arg);
     usage();
     yield = 1;
     goto EXIT;
@@ -9376,7 +9420,7 @@ least 128 code units, because it is used for retrieving error messages. */
     errcode = strtol(arg_error, &endptr, 10);
     if (*endptr != 0 && *endptr != CHAR_COMMA)
       {
-      fprintf(stderr, "** '%s' is not a valid error number list\n", arg_error);
+      fprintf(stderr, "** \"%s\" is not a valid error number list\n", arg_error);
       yield = 1;
       goto EXIT;
       }
@@ -9500,7 +9544,7 @@ if (argc > 1 && strcmp(argv[op], "-") != 0)
   infile = fopen(argv[op], INPUT_MODE);
   if (infile == NULL)
     {
-    printf("** Failed to open '%s': %s\n", argv[op], strerror(errno));
+    printf("** Failed to open \"%s\": %s\n", argv[op], strerror(errno));
     yield = 1;
     goto EXIT;
     }
@@ -9515,7 +9559,7 @@ if (argc > 2)
   outfile = fopen(argv[op+1], OUTPUT_MODE);
   if (outfile == NULL)
     {
-    printf("** Failed to open '%s': %s\n", argv[op+1], strerror(errno));
+    printf("** Failed to open \"%s\": %s\n", argv[op+1], strerror(errno));
     yield = 1;
     goto EXIT;
     }
@@ -9656,7 +9700,7 @@ free(dbuffer);
 free(pbuffer8);
 free(dfa_workspace);
 free(tables3);
-PCRE2_MAKETABLES_FREE(general_context, (void *)locale_tables);
+PCRE2_MAKETABLES_FREE(general_context, (const void *)locale_tables);
 PCRE2_MATCH_DATA_FREE(match_data);
 SUB1(pcre2_code_free, compiled_code);
 

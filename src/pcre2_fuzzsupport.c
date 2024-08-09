@@ -169,8 +169,8 @@ for (int index = 0; index < count; index++)
 
 static void describe_failure(
   const char *task,
-  const unsigned char *data,
-  size_t size,
+  const PCRE2_UCHAR *data,
+  PCRE2_SIZE size,
   uint32_t compile_options,
   uint32_t match_options,
   int errorcode,
@@ -257,7 +257,7 @@ getrlimit(RLIMIT_STACK, &rlim);
 rlim.rlim_cur = STACK_SIZE_MB * 1024 * 1024;
 if (rlim.rlim_cur > rlim.rlim_max)
   {
-  fprintf(stderr, "Hard stack size limit is too small (needed 8MiB)!\n");
+  fprintf(stderr, "Hard stack size limit is too small\n");
   _exit(1);
   }
 rc = setrlimit(RLIMIT_STACK, &rlim);
@@ -328,8 +328,8 @@ if (size > 3)
       continue;
     i++;  /* Points to '{' */
 
-    /* Loop for two values a quantifier. Offset i points to brace or comma at the
-    start of the loop.*/
+    /* Loop for two values in a quantifier. Offset i points to brace or comma
+    at the start of the loop. */
 
     for (int ii = 0; ii < 2; ii++)
       {
@@ -337,7 +337,7 @@ if (size > 3)
 
       if (i >= size - 1) goto END_QSCAN;  /* Can happen for , */
 
-      /* Ignore leading spaces */
+      /* Ignore leading spaces. */
 
       while (wdata[i+1] == ' ' || wdata[i+1] == '\t')
         {
@@ -345,7 +345,16 @@ if (size > 3)
         if (i >= size - 1) goto END_QSCAN;
         }
 
-      /* Scan for a number ending in brace or comma in the first iteration,
+      /* Ignore non-significant leading zeros. */
+
+      while (wdata[i+1] == '0' && i+2 < size && wdata[i+2] >= '0' &&
+             wdata[i+2] <= '9')
+        {
+        i++;
+        if (i >= size - 1) goto END_QSCAN;
+        }
+
+      /* Scan for a number ending in brace, or comma in the first iteration,
       optionally preceded by space. */
 
       for (j = i + 1; j < size && j < i + 7; j++)
@@ -358,6 +367,7 @@ if (size > 3)
           if (wdata[j] != '}' && wdata[j] != ',') goto OUTERLOOP;
           }
         if (wdata[j] == '}' || (ii == 0 && wdata[j] == ',')) break;
+
         if (wdata[j] < '0' || wdata[j] > '9')
           {
           j--;               /* Ensure this character is checked next. The */
@@ -368,8 +378,8 @@ if (size > 3)
 
       if (j >= size) goto END_QSCAN;  /* End of data */
 
-      /* Hit ',' or '}' or read 6 digits. Six digits is a number > 65536 which is
-      the maximum quantifier. Leave such numbers alone. */
+      /* Hit ',' or '}' or read 6 digits. Six digits is a number > 65536 which
+      is the maximum quantifier. Leave such numbers alone. */
 
       if (j >= i + 7 || q > 65535) goto OUTERLOOP;
 
